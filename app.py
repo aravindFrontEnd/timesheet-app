@@ -1811,7 +1811,13 @@ def health():
     })
 
 if __name__ == '__main__':
-    print("🚀 TimeVerify AI Dashboard - Starting...")
-    print("🌐 Open: http://localhost:5000")
+    import os
+    # OpenShift compatibility - use PORT environment variable
+    port = int(os.environ.get('PORT', 8080))
+    host = os.environ.get('HOST', '0.0.0.0')
+    
+    print(f"🚀 TimeVerify AI Dashboard - Starting on {host}:{port}...")
+    print(f"🌐 Server running on {host}:{port}")
     print("📊 Features: Modern Dashboard + Simplified Processing")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    
+    app.run(host=host, port=port, debug=False)
