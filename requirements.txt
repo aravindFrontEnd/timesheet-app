@@ -18,11 +18,15 @@ openpyxl==3.1.2
 # HTTP Requests
 requests>=2.31.0
 
-# Flask dependencies (explicitly listed for container environments)
+# Flask dependencies (for container stability)
 click>=8.0.0
 itsdangerous>=2.1.0
 Jinja2>=3.1.0
 MarkupSafe>=2.1.0
 
-# Date/time handling
+# Date/time utilities
 python-dateutil>=2.8.0
+
+# Additional utilities for production
+setuptools>=65.0.0
+wheel>=0.37.0
