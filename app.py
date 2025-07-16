@@ -2505,6 +2505,237 @@ def dashboard():
                 background: linear-gradient(135deg, #f093fb, #f5576c);
             }
             
+            .processing-card {
+                background: white;
+                border-radius: 12px;
+                padding: 24px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                display: none;
+                grid-column: 1 / -1;
+            }
+            
+            .processing-header {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                margin-bottom: 20px;
+            }
+            
+            .spinner {
+                width: 20px;
+                height: 20px;
+                border: 2px solid #e3e6f0;
+                border-top: 2px solid #667eea;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+            }
+            
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            
+            .processing-steps {
+                background: #f8f9fc;
+                border-radius: 8px;
+                padding: 16px;
+                margin-top: 16px;
+            }
+            
+            .processing-step {
+                display: flex;
+                align-items: center;
+                padding: 8px 0;
+                color: #8b949e;
+                font-size: 14px;
+                border-bottom: 1px solid #e3e6f0;
+            }
+            
+            .processing-step:last-child {
+                border-bottom: none;
+            }
+            
+            .processing-step.active {
+                color: #667eea;
+                font-weight: 500;
+            }
+            
+            .processing-step.completed {
+                color: #22c55e;
+            }
+            
+            .processing-step i {
+                width: 20px;
+                margin-right: 8px;
+            }
+            
+            .results-card {
+                background: white;
+                border-radius: 12px;
+                padding: 24px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                display: none;
+                grid-column: 1 / -1;
+            }
+            
+            .results-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 24px;
+            }
+            
+            .results-title {
+                font-size: 18px;
+                font-weight: 600;
+                color: #1e1e2e;
+            }
+            
+            .download-buttons {
+                display: flex;
+                gap: 8px;
+            }
+            
+            .btn-small {
+                padding: 8px 16px;
+                font-size: 12px;
+            }
+            
+            .status-badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 6px 12px;
+                border-radius: 6px;
+                font-size: 12px;
+                font-weight: 500;
+            }
+            
+            .status-success {
+                background: #dcfce7;
+                color: #16a34a;
+            }
+            
+            .status-warning {
+                background: #fef3c7;
+                color: #d97706;
+            }
+            
+            .results-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 16px;
+                margin: 20px 0;
+            }
+            
+            .result-metric {
+                text-align: center;
+                padding: 16px;
+                background: #f8f9fc;
+                border-radius: 8px;
+            }
+            
+            .result-value {
+                font-size: 24px;
+                font-weight: 700;
+                color: #1e1e2e;
+            }
+            
+            .result-label {
+                font-size: 12px;
+                color: #8b949e;
+                margin-top: 4px;
+            }
+            
+            /* Separate table section */
+            .table-section {
+                background: white;
+                border-radius: 12px;
+                padding: 24px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                margin: 32px;
+                display: none;
+            }
+            
+            .table-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 20px;
+                padding-bottom: 16px;
+                border-bottom: 2px solid #e3e6f0;
+            }
+            
+            .table-title {
+                font-size: 20px;
+                font-weight: 600;
+                color: #1e1e2e;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            
+            .data-table {
+                background: #f8f9fc;
+                border-radius: 8px;
+                padding: 16px;
+                max-height: 400px;
+                overflow-y: auto;
+            }
+            
+            .data-table table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 13px;
+            }
+            
+            .data-table th {
+                background: #667eea;
+                color: white;
+                padding: 12px 8px;
+                text-align: left;
+                font-weight: 600;
+                border: 1px solid #5a6fd8;
+                position: sticky;
+                top: 0;
+                z-index: 10;
+            }
+            
+            .data-table td {
+                padding: 10px 8px;
+                border: 1px solid #e3e6f0;
+                background: white;
+            }
+            
+            .data-table tr:hover td {
+                background: #f8f9ff;
+            }
+            
+            .check-value {
+                color: #dc3545;
+                font-weight: bold;
+                background: #ffe6e6 !important;
+            }
+            
+            .table-stats {
+                margin-top: 16px;
+                padding: 12px;
+                background: #f0f4ff;
+                border-radius: 6px;
+                font-size: 12px;
+                color: #667eea;
+                display: flex;
+                justify-content: space-between;
+                flex-wrap: wrap;
+                gap: 16px;
+            }
+            
+            .table-stat {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            }
+            
             @media (max-width: 768px) {
                 .sidebar {
                     transform: translateX(-100%);
@@ -2521,6 +2752,10 @@ def dashboard():
                 
                 .stats-row {
                     grid-template-columns: 1fr;
+                }
+                
+                .table-section {
+                    margin: 16px;
                 }
             }
         </style>
@@ -3227,7 +3462,7 @@ def process_screenshot():
         
         print(f"Processing screenshot for: {consultant_name}")
         
-        # Process using simplified logic
+        # Process using enhanced logic
         result = processor.process_screenshot_from_bytes(file.read(), consultant_name)
         
         return jsonify(result)
@@ -3590,29 +3825,21 @@ def download_excel():
 
 @app.route('/health')
 def health():
-    """Health check endpoint for OpenShift"""
-    try:
-        # Test Tesseract availability
-        pytesseract.get_tesseract_version()
-        tesseract_status = "available"
-    except:
-        tesseract_status = "not_available"
-    
     return jsonify({
         'status': 'healthy',
         'service': 'TimeVerify AI Dashboard',
-        'tesseract': tesseract_status,
         'timestamp': datetime.now().isoformat()
     })
 
 if __name__ == '__main__':
-    import os
-    # OpenShift compatibility - use PORT environment variable
-    port = int(os.environ.get('PORT', 8080))
-    host = os.environ.get('HOST', '0.0.0.0')
-    
-    print(f"🚀 TimeVerify AI Dashboard - Starting on {host}:{port}...")
-    print(f"🌐 Server running on {host}:{port}")
-    print("📊 Features: Modern Dashboard + Simplified Processing")
-    
-    app.run(host=host, port=port, debug=False)
+   import os
+   # OpenShift compatibility - use PORT environment variable
+   port = int(os.environ.get('PORT', 8080))
+   host = os.environ.get('HOST', '0.0.0.0')
+   
+   print(f"🚀 TimeVerify AI Dashboard - Starting on {host}:{port}...")
+   print(f"🌐 Server running on {host}:{port}")
+   print("📊 Features: Enhanced OCR Processing + Modern Dashboard")
+   print(f"🔧 Tesseract Available: {tesseract_available}")
+   
+   app.run(host=host, port=port, debug=False)
