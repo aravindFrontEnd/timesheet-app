@@ -2,10 +2,11 @@ FROM registry.access.redhat.com/ubi8/python-39:latest
 
 WORKDIR /app
 
-# Install Tesseract OCR - Enable EPEL repository first
+# Install Tesseract OCR - Enable EPEL and CRB repositories
 USER root
 RUN yum update -y && \
     yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
+    /usr/bin/crb enable && \
     yum install -y tesseract tesseract-langpack-eng && \
     yum clean all
 
@@ -22,7 +23,7 @@ COPY . .
 # Set environment variables
 ENV PORT=8080
 ENV FLASK_ENV=production
-ENV TESSDATA_PREFIX=/usr/share/tesseract/4/tessdata
+ENV TESSDATA_PREFIX=/usr/share/tesseract/tessdata
 
 EXPOSE 8080
 
