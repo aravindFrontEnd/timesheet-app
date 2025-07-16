@@ -1,17 +1,17 @@
-FROM registry.access.redhat.com/ubi8/python-39:latest
+FROM python:3.9-slim
 
 WORKDIR /app
 
-# Install Tesseract OCR - Enable EPEL and CRB repositories
-USER root
-RUN yum update -y && \
-    yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
-    /usr/bin/crb enable && \
-    yum install -y tesseract tesseract-langpack-eng && \
-    yum clean all
-
-# Switch back to non-root user for security
-USER 1001
+# Install Tesseract OCR and system dependencies
+RUN apt-get update && \
+    apt-get install -y \
+        tesseract-ocr \
+        tesseract-ocr-eng \
+        libtesseract-dev \
+        libleptonica-dev \
+        pkg-config \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python packages
 COPY requirements.txt .
@@ -23,7 +23,7 @@ COPY . .
 # Set environment variables
 ENV PORT=8080
 ENV FLASK_ENV=production
-ENV TESSDATA_PREFIX=/usr/share/tesseract/tessdata
+ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata
 
 EXPOSE 8080
 
