@@ -1833,30 +1833,71 @@ import pytesseract
 from docx import Document
 import re
 
-# Configure Tesseract for different environments
+# Enhanced Tesseract configuration for different environments
 def configure_tesseract():
     """Configure Tesseract path for OpenShift/container environment"""
-    # OpenShift/Linux environment
-    if os.path.exists('/usr/bin/tesseract'):
-        pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
-        print("✅ Tesseract found at /usr/bin/tesseract")
+    import os
+    import pytesseract
+    
+    print("🔧 Configuring Tesseract OCR...")
+    
+    # Ubuntu/Linux environment (OpenShift)
+    linux_paths = [
+        '/usr/bin/tesseract',
+        '/usr/local/bin/tesseract',
+        '/opt/tesseract/bin/tesseract'
+    ]
+    
+    for path in linux_paths:
+        if os.path.exists(path):
+            pytesseract.pytesseract.tesseract_cmd = path
+            print(f"✅ Tesseract found at {path}")
+            
+            # Test Tesseract functionality
+            try:
+                version = pytesseract.get_tesseract_version()
+                print(f"✅ Tesseract version: {version}")
+                
+                # Test tessdata path
+                tessdata_paths = [
+                    '/usr/share/tesseract-ocr/4.00/tessdata',
+                    '/usr/share/tesseract-ocr/5/tessdata',
+                    '/usr/share/tesseract-ocr/tessdata',
+                    '/usr/share/tessdata'
+                ]
+                
+                for tessdata_path in tessdata_paths:
+                    if os.path.exists(tessdata_path):
+                        os.environ['TESSDATA_PREFIX'] = tessdata_path
+                        print(f"✅ Tessdata found at: {tessdata_path}")
+                        break
+                
+                return True
+                
+            except Exception as e:
+                print(f"❌ Tesseract test failed: {e}")
+                continue
+                
     # Windows environment (local development)
-    elif os.path.exists(r'C:\Program Files\Tesseract-OCR\tesseract.exe'):
-        pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+    windows_path = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+    if os.path.exists(windows_path):
+        pytesseract.pytesseract.tesseract_cmd = windows_path
         print("✅ Tesseract found at Windows path")
-    else:
-        print("⚠️ Tesseract not found - OCR functionality may not work")
+        return True
+    
+    print("⚠️ Tesseract not found - OCR functionality will be limited")
+    return False
 
-# Call configuration function
-configure_tesseract()
+# Configure Tesseract at startup
+tesseract_available = configure_tesseract()
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
-class SimpleTimesheetProcessor:
+class EnhancedTimesheetProcessor:
     def __init__(self):
-        # Tesseract configuration is now handled globally
         self.timesheet_data = []
+        self.tesseract_available = tesseract_available
 
     def extract_images_from_word_file(self, word_file_path):
         """Extract images from Word document"""
@@ -1871,10 +1912,11 @@ class SimpleTimesheetProcessor:
                         if image.mode != 'RGB':
                             image = image.convert('RGB')
                         images.append(image)
-                    except:
+                    except Exception as e:
+                        print(f"❌ Error processing image: {e}")
                         continue
         except Exception as e:
-            print(f"Error with document: {e}")
+            print(f"❌ Error with document: {e}")
         return images
 
     def extract_name_from_filename(self, filename):
@@ -1886,105 +1928,232 @@ class SimpleTimesheetProcessor:
         return name if name else "Unknown"
 
     def extract_text_from_image(self, image):
-        """Extract text using OCR with error handling"""
-        try:
-            config = r'--oem 3 --psm 6 -c preserve_interword_spaces=1'
-            text = pytesseract.image_to_string(image, config=config)
-            return text
-        except Exception as e:
-            print(f"❌ OCR Error: {e}")
-            return f"OCR_ERROR: {str(e)}"
-
-    def parse_timesheet_entries(self, text, employee_name):
-        """Parse timesheet entries from text"""
-        entries = []
-        if not text or text.startswith("OCR_ERROR"):
-            return entries
+        """Extract text using OCR with robust error handling and multiple configurations"""
+        if not self.tesseract_available:
+            return "OCR_ERROR: Tesseract not available in this environment"
             
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
-        
-        for line in lines:
-            # Look for date patterns
-            date_patterns = [
-                r'(\d{1,2}/\d{1,2}/\d{4})',
-                r'(\d{1,2}-\d{1,2}-\d{4})',
+        try:
+            print(f"🔍 OCR Debug: Image mode={image.mode}, size={image.size}")
+            
+            # Verify Tesseract is working
+            try:
+                version = pytesseract.get_tesseract_version()
+                print(f"✅ Tesseract version: {version}")
+            except Exception as version_error:
+                print(f"❌ Tesseract version check failed: {version_error}")
+                return f"OCR_ERROR: Tesseract not accessible - {version_error}"
+            
+            # Preprocess image for better OCR
+            processed_image = self.preprocess_image_for_ocr(image)
+            
+            # Try multiple OCR configurations
+            ocr_configs = [
+                r'--oem 3 --psm 6 -c preserve_interword_spaces=1',
+                r'--oem 3 --psm 8 -c preserve_interword_spaces=1',
+                r'--oem 3 --psm 13',
+                r'--oem 3 --psm 11',
+                r'--psm 6',
+                r'--psm 8'
             ]
             
-            date_match = None
-            for pattern in date_patterns:
-                match = re.search(pattern, line)
-                if match:
-                    date_match = match
-                    break
+            best_text = ""
+            best_confidence = 0
             
-            if date_match:
-                date = date_match.group(1)
-                
-                # Format date properly
+            for config in ocr_configs:
                 try:
-                    if '/' in date:
-                        parts = date.split('/')
-                        if len(parts) == 3:
-                            month, day, year = parts
-                            formatted_date = f"{int(month):02d}/{int(day):02d}/{year}"
-                    elif '-' in date:
-                        parts = date.split('-')
-                        if len(parts) == 3:
-                            month, day, year = parts
-                            formatted_date = f"{int(month):02d}/{int(day):02d}/{year}"
-                    else:
-                        formatted_date = date
-                except:
-                    formatted_date = date
+                    print(f"🔍 Trying OCR config: {config}")
+                    text = pytesseract.image_to_string(processed_image, config=config)
+                    
+                    if text and text.strip():
+                        # Simple confidence estimation based on text quality
+                        confidence = self.estimate_text_confidence(text)
+                        print(f"✅ OCR extracted {len(text)} chars with estimated confidence: {confidence}")
+                        
+                        if confidence > best_confidence:
+                            best_text = text
+                            best_confidence = confidence
+                            
+                        # If we get good enough text, use it
+                        if confidence > 0.7:
+                            break
+                            
+                except Exception as config_error:
+                    print(f"❌ OCR config {config} failed: {config_error}")
+                    continue
+            
+            if best_text and best_text.strip():
+                print(f"✅ OCR Success: Best text with confidence {best_confidence}")
+                return best_text
+            else:
+                print("⚠️ OCR Warning: No readable text found in image")
+                return "OCR_WARNING: No readable text found in image"
                 
-                # Look for hours
-                hours_patterns = [
-                    r'(\d{1,2}(?:\.\d{1,2})?)\s*h(?:r|rs?|ours?)?',
-                    r'(\d{1,2}(?:\.\d{1,2})?)\s+(?:Cost|Installation|Store|Enterprise|Product)',
-                    r'\(\s*(\d{1,2}(?:\.\d{1,2})?)\s*\)',
-                    r'(?:^|\s)(\d{1,2}(?:\.\d{1,2})?)(?=\s|$)'
-                ]
-                
-                hours_match = None
-                for pattern in hours_patterns:
-                    match = re.search(pattern, line)
-                    if match:
-                        hours_match = match
-                        break
-                
-                if hours_match:
-                    try:
-                        hours = float(hours_match.group(1))
-                        if 0 <= hours <= 24:
-                            entry = {
-                                'Name': employee_name,
-                                'Date': formatted_date,
-                                'Hours': hours
-                            }
-                            entries.append(entry)
-                    except:
-                        pass
-                else:
-                    entry = {
-                        'Name': employee_name,
-                        'Date': formatted_date,
-                        'Hours': "CHECK"
-                    }
-                    entries.append(entry)
-        
-        return entries
+        except Exception as e:
+            error_msg = f"OCR_ERROR: {str(e)}"
+            print(f"❌ OCR Failed: {error_msg}")
+            return error_msg
 
-    def process_screenshot_from_bytes(self, image_bytes, consultant_name):
-        """Process screenshot from bytes"""
+    def preprocess_image_for_ocr(self, image):
+        """Preprocess image to improve OCR accuracy"""
         try:
-            image = Image.open(io.BytesIO(image_bytes))
+            # Convert to RGB if not already
             if image.mode != 'RGB':
                 image = image.convert('RGB')
             
-            # Extract text
-            text = self.extract_text_from_image(image)
+            # Resize if too small (OCR works better on larger images)
+            width, height = image.size
+            if width < 600 or height < 400:
+                scale_factor = max(600/width, 400/height)
+                new_width = int(width * scale_factor)
+                new_height = int(height * scale_factor)
+                image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                print(f"🔍 Resized image to {new_width}x{new_height} for better OCR")
             
-            # Parse entries
+            return image
+            
+        except Exception as e:
+            print(f"❌ Image preprocessing failed: {e}")
+            return image  # Return original if preprocessing fails
+
+    def estimate_text_confidence(self, text):
+        """Estimate text quality/confidence based on simple heuristics"""
+        if not text:
+            return 0
+        
+        # Simple confidence estimation
+        confidence = 0.5  # Base confidence
+        
+        # Check for common timesheet patterns
+        if re.search(r'\d{1,2}[:/]\d{1,2}[:/]\d{2,4}', text):  # Date patterns
+            confidence += 0.2
+        if re.search(r'\d+\.?\d*\s*h', text, re.IGNORECASE):  # Hour patterns
+            confidence += 0.2
+        if len(text.strip()) > 20:  # Reasonable amount of text
+            confidence += 0.1
+        
+        return min(confidence, 1.0)
+
+    def parse_timesheet_entries(self, text, employee_name):
+        """Parse timesheet entries from text with enhanced error handling"""
+        entries = []
+        if not text or text.startswith("OCR_ERROR") or text.startswith("OCR_WARNING"):
+            print(f"⚠️ Skipping parsing due to OCR issue: {text[:50]}...")
+            return entries
+            
+        print(f"🔍 Parsing text for {employee_name}: {len(text)} characters")
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        print(f"🔍 Found {len(lines)} non-empty lines")
+        
+        for i, line in enumerate(lines):
+            try:
+                # Look for date patterns
+                date_patterns = [
+                    r'(\d{1,2}/\d{1,2}/\d{4})',
+                    r'(\d{1,2}-\d{1,2}-\d{4})',
+                    r'(\d{1,2}\.\d{1,2}\.\d{4})',
+                ]
+                
+                date_match = None
+                for pattern in date_patterns:
+                    match = re.search(pattern, line)
+                    if match:
+                        date_match = match
+                        break
+                
+                if date_match:
+                    date = date_match.group(1)
+                    print(f"🔍 Found date in line {i}: {date}")
+                    
+                    # Format date properly
+                    try:
+                        if '/' in date:
+                            parts = date.split('/')
+                            if len(parts) == 3:
+                                month, day, year = parts
+                                formatted_date = f"{int(month):02d}/{int(day):02d}/{year}"
+                        elif '-' in date:
+                            parts = date.split('-')
+                            if len(parts) == 3:
+                                month, day, year = parts
+                                formatted_date = f"{int(month):02d}/{int(day):02d}/{year}"
+                        elif '.' in date:
+                            parts = date.split('.')
+                            if len(parts) == 3:
+                                month, day, year = parts
+                                formatted_date = f"{int(month):02d}/{int(day):02d}/{year}"
+                        else:
+                            formatted_date = date
+                    except:
+                        formatted_date = date
+                    
+                    # Look for hours with enhanced patterns
+                    hours_patterns = [
+                        r'(\d{1,2}(?:\.\d{1,2})?)\s*h(?:r|rs?|ours?)?',
+                        r'(\d{1,2}(?:\.\d{1,2})?)\s+(?:Cost|Installation|Store|Enterprise|Product|Work|Task)',
+                        r'\(\s*(\d{1,2}(?:\.\d{1,2})?)\s*\)',
+                        r'(?:^|\s)(\d{1,2}(?:\.\d{1,2})?)(?=\s|$)',
+                        r'(\d{1,2}(?:\.\d{1,2})?)\s*hours?',
+                        r'Hours?:\s*(\d{1,2}(?:\.\d{1,2})?)',
+                    ]
+                    
+                    hours_match = None
+                    for pattern in hours_patterns:
+                        match = re.search(pattern, line, re.IGNORECASE)
+                        if match:
+                            hours_match = match
+                            break
+                    
+                    if hours_match:
+                        try:
+                            hours = float(hours_match.group(1))
+                            if 0 <= hours <= 24:
+                                entry = {
+                                    'Name': employee_name,
+                                    'Date': formatted_date,
+                                    'Hours': hours
+                                }
+                                entries.append(entry)
+                                print(f"✅ Added entry: {formatted_date} - {hours} hours")
+                            else:
+                                print(f"⚠️ Invalid hours value: {hours}")
+                        except ValueError as e:
+                            print(f"❌ Error parsing hours: {e}")
+                    else:
+                        # Create entry with CHECK status for manual review
+                        entry = {
+                            'Name': employee_name,
+                            'Date': formatted_date,
+                            'Hours': "CHECK"
+                        }
+                        entries.append(entry)
+                        print(f"⚠️ Added CHECK entry for: {formatted_date}")
+                        
+            except Exception as e:
+                print(f"❌ Error parsing line {i}: {e}")
+                continue
+        
+        print(f"✅ Parsed {len(entries)} total entries")
+        return entries
+
+    def process_screenshot_from_bytes(self, image_bytes, consultant_name):
+        """Process screenshot from bytes with enhanced error handling"""
+        try:
+            print(f"🔍 Processing screenshot for: {consultant_name}")
+            print(f"🔍 Image size: {len(image_bytes)} bytes")
+            
+            # Load and process image
+            image = Image.open(io.BytesIO(image_bytes))
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            print(f"🔍 Image loaded: {image.size}, mode: {image.mode}")
+            
+            # Extract text using OCR
+            print("🔍 Starting OCR extraction...")
+            text = self.extract_text_from_image(image)
+            print(f"🔍 OCR completed, text length: {len(text) if text else 0}")
+            
+            # Parse timesheet entries
+            print("🔍 Starting timesheet parsing...")
             entries = self.parse_timesheet_entries(text, consultant_name)
             
             # Calculate total hours
@@ -1994,18 +2163,29 @@ class SimpleTimesheetProcessor:
             # Simulate system check
             system_hours = self.simulate_system_check(consultant_name)
             
-            return {
+            result = {
                 'consultant_name': consultant_name,
                 'total_entries': len(entries),
                 'screenshot_hours': total_hours,
                 'system_hours': system_hours,
                 'discrepancy_detected': total_hours != system_hours,
                 'entries': entries,
+                'ocr_text_length': len(text) if text else 0,
+                'tesseract_available': self.tesseract_available,
                 'status': 'success'
             }
             
+            print(f"✅ Processing complete: {len(entries)} entries, {total_hours} hours")
+            return result
+            
         except Exception as e:
-            return {'error': str(e), 'status': 'error'}
+            error_result = {
+                'error': str(e), 
+                'status': 'error',
+                'tesseract_available': self.tesseract_available
+            }
+            print(f"❌ Screenshot processing failed: {e}")
+            return error_result
 
     def simulate_system_check(self, consultant_name):
         """Simulate system lookup"""
@@ -2018,7 +2198,8 @@ class SimpleTimesheetProcessor:
         }
         return demo_data.get(consultant_name.lower().strip(), 40)
 
-processor = SimpleTimesheetProcessor()
+# Create processor instance
+processor = EnhancedTimesheetProcessor()
 
 @app.route('/')
 def dashboard():
@@ -2324,237 +2505,6 @@ def dashboard():
                 background: linear-gradient(135deg, #f093fb, #f5576c);
             }
             
-            .processing-card {
-                background: white;
-                border-radius: 12px;
-                padding: 24px;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                display: none;
-                grid-column: 1 / -1;
-            }
-            
-            .processing-header {
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                margin-bottom: 20px;
-            }
-            
-            .spinner {
-                width: 20px;
-                height: 20px;
-                border: 2px solid #e3e6f0;
-                border-top: 2px solid #667eea;
-                border-radius: 50%;
-                animation: spin 1s linear infinite;
-            }
-            
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-            
-            .processing-steps {
-                background: #f8f9fc;
-                border-radius: 8px;
-                padding: 16px;
-                margin-top: 16px;
-            }
-            
-            .processing-step {
-                display: flex;
-                align-items: center;
-                padding: 8px 0;
-                color: #8b949e;
-                font-size: 14px;
-                border-bottom: 1px solid #e3e6f0;
-            }
-            
-            .processing-step:last-child {
-                border-bottom: none;
-            }
-            
-            .processing-step.active {
-                color: #667eea;
-                font-weight: 500;
-            }
-            
-            .processing-step.completed {
-                color: #22c55e;
-            }
-            
-            .processing-step i {
-                width: 20px;
-                margin-right: 8px;
-            }
-            
-            .results-card {
-                background: white;
-                border-radius: 12px;
-                padding: 24px;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                display: none;
-                grid-column: 1 / -1;
-            }
-            
-            .results-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 24px;
-            }
-            
-            .results-title {
-                font-size: 18px;
-                font-weight: 600;
-                color: #1e1e2e;
-            }
-            
-            .download-buttons {
-                display: flex;
-                gap: 8px;
-            }
-            
-            .btn-small {
-                padding: 8px 16px;
-                font-size: 12px;
-            }
-            
-            .status-badge {
-                display: inline-flex;
-                align-items: center;
-                gap: 6px;
-                padding: 6px 12px;
-                border-radius: 6px;
-                font-size: 12px;
-                font-weight: 500;
-            }
-            
-            .status-success {
-                background: #dcfce7;
-                color: #16a34a;
-            }
-            
-            .status-warning {
-                background: #fef3c7;
-                color: #d97706;
-            }
-            
-            .results-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                gap: 16px;
-                margin: 20px 0;
-            }
-            
-            .result-metric {
-                text-align: center;
-                padding: 16px;
-                background: #f8f9fc;
-                border-radius: 8px;
-            }
-            
-            .result-value {
-                font-size: 24px;
-                font-weight: 700;
-                color: #1e1e2e;
-            }
-            
-            .result-label {
-                font-size: 12px;
-                color: #8b949e;
-                margin-top: 4px;
-            }
-            
-            /* Separate table section */
-            .table-section {
-                background: white;
-                border-radius: 12px;
-                padding: 24px;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                margin: 32px;
-                display: none;
-            }
-            
-            .table-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 20px;
-                padding-bottom: 16px;
-                border-bottom: 2px solid #e3e6f0;
-            }
-            
-            .table-title {
-                font-size: 20px;
-                font-weight: 600;
-                color: #1e1e2e;
-                display: flex;
-                align-items: center;
-                gap: 8px;
-            }
-            
-            .data-table {
-                background: #f8f9fc;
-                border-radius: 8px;
-                padding: 16px;
-                max-height: 400px;
-                overflow-y: auto;
-            }
-            
-            .data-table table {
-                width: 100%;
-                border-collapse: collapse;
-                font-size: 13px;
-            }
-            
-            .data-table th {
-                background: #667eea;
-                color: white;
-                padding: 12px 8px;
-                text-align: left;
-                font-weight: 600;
-                border: 1px solid #5a6fd8;
-                position: sticky;
-                top: 0;
-                z-index: 10;
-            }
-            
-            .data-table td {
-                padding: 10px 8px;
-                border: 1px solid #e3e6f0;
-                background: white;
-            }
-            
-            .data-table tr:hover td {
-                background: #f8f9ff;
-            }
-            
-            .check-value {
-                color: #dc3545;
-                font-weight: bold;
-                background: #ffe6e6 !important;
-            }
-            
-            .table-stats {
-                margin-top: 16px;
-                padding: 12px;
-                background: #f0f4ff;
-                border-radius: 6px;
-                font-size: 12px;
-                color: #667eea;
-                display: flex;
-                justify-content: space-between;
-                flex-wrap: wrap;
-                gap: 16px;
-            }
-            
-            .table-stat {
-                display: flex;
-                align-items: center;
-                gap: 4px;
-            }
-            
             @media (max-width: 768px) {
                 .sidebar {
                     transform: translateX(-100%);
@@ -2571,10 +2521,6 @@ def dashboard():
                 
                 .stats-row {
                     grid-template-columns: 1fr;
-                }
-                
-                .table-section {
-                    margin: 16px;
                 }
             }
         </style>
